@@ -101,34 +101,48 @@ public class TextProcessor {
                     String word1 = scanner.next().toLowerCase();
                     System.out.print("Enter word2: ");
                     String word2 = scanner.next().toLowerCase();
+                    long startTime = System.nanoTime();
                     String result = queryBridgeWords(word1, word2);
                     System.out.println(result);
+                    long endTime = System.nanoTime();
+                    System.out.println("Execution time: " + (endTime - startTime) + " ns");
                 }
                 case "3" -> {
                     // 清空缓冲区
                     scanner.nextLine();
                     System.out.print("Enter a new text:");
                     String Text = scanner.nextLine().toLowerCase();
+                    long startTime = System.nanoTime();
                     String newText = generateNewText(Text);
                     System.out.println(newText);
+                    long endTime = System.nanoTime();
+                    System.out.println("Execution time: " + (endTime - startTime) + " ns");
                 }
                 case "4" -> {
                     System.out.print("Enter word3: ");
                     String word3 = scanner.next().toLowerCase();
                     System.out.print("Enter word4: ");
                     String word4 = scanner.next().toLowerCase();
+                    long startTime = System.nanoTime();
                     String shortestPath = calcShortestPath(word3, word4);
                     System.out.println(shortestPath);
+                    long endTime = System.nanoTime();
+                    System.out.println("Execution time: " + (endTime - startTime) + " ns");
                 }
                 case "5" -> {
+                    long startTime = System.nanoTime();
                     String walkPath = randomWalk();
                     System.out.println(walkPath);
+
                     try (PrintWriter writer = new PrintWriter(new FileWriter("output.txt"))) {
                         writer.println(walkPath);
                         System.out.println("Content has been written to the file.");
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+
+                    long endTime = System.nanoTime();
+                    System.out.println("Execution time: " + (endTime - startTime) + " ns");
                 }
                 case "0" -> System.out.println("退出程序");
                 default -> System.out.println("无效的选择，请重新选择");
@@ -147,7 +161,8 @@ public class TextProcessor {
         neighbors.put(wordB, neighbors.getOrDefault(wordB, 0) + 1);
     }
 
-    static void showDirectedGraph(){
+    //辅助函数，创建带权有向图
+    private static DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> createDirectedWeightedGraph(){
         //创建一个有向图
         DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> jgraphtGraph = new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         // 添加顶点
@@ -170,7 +185,11 @@ public class TextProcessor {
                 }
             }
         }
+        return jgraphtGraph;
+    }
 
+    static void showDirectedGraph(){
+        DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> jgraphtGraph = createDirectedWeightedGraph();
         JGraphXAdapter<String, DefaultWeightedEdge> jGraphXAdapter = new JGraphXAdapter<>(jgraphtGraph);
         jGraphXAdapter.setEdgeLabelsMovable(true); // 允许移动标签
 
@@ -224,7 +243,7 @@ public class TextProcessor {
             return "No word1 or word2 in the graph!";
         }
 
-        Set<String> bridgeWords = new HashSet<>();
+        Set<String> bridgeWords;
         bridgeWords = findBridgeWords(word1, word2);
 
         // 根据桥接词的数量返回相应的结果
@@ -305,10 +324,43 @@ public class TextProcessor {
             return "No path exists between " + word1 + " and " + word2 + "!"; // 不存在路径
         }
         path.add(0, word1);
+
+        //标注
+        DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> jgraphtGraph = createDirectedWeightedGraph();
+        // 创建JGraphXAdapter
+        JGraphXAdapter<String, DefaultWeightedEdge> jgxAdapter = new JGraphXAdapter<>(jgraphtGraph);
+        // 将最短路径上的边加粗
+        if (path.size() > 1) {
+            for (int i = 0; i < path.size() - 1; i++) {
+                String sourceVertex = path.get(i);
+                String targetVertex = path.get(i + 1);
+                DefaultWeightedEdge edge = jgraphtGraph.getEdge(sourceVertex, targetVertex);
+                if (edge != null) {
+                    jgxAdapter.setCellStyle("strokeColor=red;strokeWidth=3", new Object[]{jgxAdapter.getEdgeToCellMap().get(edge)});
+                }
+            }
+        }
+        // 设置布局
+        mxIGraphLayout layout = new mxCircleLayout(jgxAdapter);
+        layout.execute(jgxAdapter.getDefaultParent());
+
+        // 创建Swing窗口并添加JGraphX组件
+        JFrame frame = new JFrame();
+        mxGraphComponent graphComponent = new mxGraphComponent(jgxAdapter);
+        frame.getContentPane().add(graphComponent);
+        frame.setTitle("Directed Weighted Graph with Shortest Path");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 400);
+        frame.setVisible(true);
+
         return "Shortest path between " + word1 + " and " + word2 + ": " + String.join("→", path);
     }
 
     static String randomWalk(){
+        if (graph.isEmpty()) {
+            return "Graph is empty";
+        }
+
         Scanner scanner = new Scanner(System.in);
         System.out.println("Press Enter to stop the traversal at any time.");
 
@@ -321,25 +373,12 @@ public class TextProcessor {
         traversal.add(startVertex);
 
         while (true) {
-            Map<String, Integer> neighbors = graph.get(startVertex);
-            if (neighbors == null || neighbors.isEmpty()) {
-                break;
+            //防止运行过快没有空终止
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-            List<String> availableNeighbors = new ArrayList<>();
-            for (String neighbor : neighbors.keySet()) {
-                String edge = startVertex + " -> " + neighbor;
-                if (!visitedEdges.contains(edge)) {
-                    availableNeighbors.add(neighbor);
-                }
-            }
-            if (availableNeighbors.isEmpty()) {
-                break;
-            }
-            String nextVertex = availableNeighbors.get(random.nextInt(availableNeighbors.size()));
-            String edge = startVertex + " -> " + nextVertex;
-            traversal.add(nextVertex);
-            visitedEdges.add(edge);
-            startVertex = nextVertex;
 
             // 检查用户是否要终止遍历
             try {
@@ -351,12 +390,33 @@ public class TextProcessor {
                 throw new RuntimeException(e);
             }
 
-            //防止运行过快没有空终止
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+            Map<String, Integer> neighbors = graph.get(startVertex);
+            if (neighbors == null || neighbors.isEmpty()) {
+                break; // 如果没有邻接点则结束遍历
             }
+
+            // 获取所有邻接点
+            List<String> allNeighbors = new ArrayList<>(neighbors.keySet());
+            if (allNeighbors.isEmpty()) {
+                break; // 如果没有邻接点则结束遍历
+            }
+
+            // 随机选择一个邻接点
+            String nextVertex = allNeighbors.get(random.nextInt(allNeighbors.size()));
+            String edge = startVertex + " -> " + nextVertex;
+
+            // 如果该边已被访问，则结束遍历
+            if (visitedEdges.contains(edge)) {
+                System.out.println("Edge " + edge + " already visited. Stopping traversal.");
+                break;
+            }
+
+            traversal.add(nextVertex);
+            visitedEdges.add(edge); // 记录该边已被访问
+            startVertex = nextVertex; // 更新当前顶点
+
+            // 输出当前的遍历路径
+            System.out.println(traversal);
 
 
         }
